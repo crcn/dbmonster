@@ -111,6 +111,7 @@
   function load () {
     controller.load();
     view.accessor.apply();
+    // view.runloop.runNow();
     setTimeout(load, 0);
   }
   load();

@@ -6,7 +6,7 @@ var ENV = {
 function getTopFiveQueries(db) {
   var arr = db.samples[db.samples.length - 1].queries.slice(0, 5);
   while (arr.length < 5) {
-    arr.push({ query: '' });
+    arr.push({ query: '', elapsed: 0 });
   }
   return arr;
 }
