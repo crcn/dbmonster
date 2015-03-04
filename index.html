@@ -103,12 +103,12 @@
   function load () {
     controller.load();
     view.accessor.apply();
-    setTimeout(load, ENV.timeout);
+    setTimeout(load, 0);
   }
   load();
 </script>
 
-<script>
+<!--script>
   var stats = new MemoryStats();
   stats.domElement.style.position = 'fixed';
   stats.domElement.style.right        = '0px';
@@ -118,7 +118,7 @@
       stats.update();
       requestAnimationFrame(rAFloop);
   });
-</script>
+</script-->
 
 </body>
 </html>
