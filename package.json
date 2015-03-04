@@ -1,0 +1,27 @@
+{
+  "name": "paperclip-dbmonster",
+  "version": "1.0.0",
+  "description": "",
+  "main": "./lib/index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "./node_modules/.bin/static ."
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/crcn/dbmonster.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/crcn/dbmonster/issues"
+  },
+  "homepage": "https://github.com/crcn/dbmonster",
+  "dependencies": {
+    "paperclip": "^1.4.2"
+  },
+  "devDependencies": {
+    "mocha": "^2.1.0",
+    "node-static": "^0.7.6"
+  }
+}
