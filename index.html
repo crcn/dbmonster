@@ -9,6 +9,14 @@
 </head>
 <body>
 
+  <div id="link">
+    You're looking at DBMonster rendered with <a href="http://paperclipjs.com">PaperclipJS.</a><br> 
+    <a href="https://github.com/crcn/dbmonster/blob/master/index.html">View Source Code</a>
+    <hr />
+    <a href="https://dbmonster.firebaseapp.com/">Ember DBMonster</a><br>
+    <a href="http://run.plnkr.co/plunks/Wwgjjpl9NHMO5Nd1TUyN/">React DBMonster</a><br>
+  </div>
+
   <script type="x-paperclip" id="main-template">
     <table class="table table-striped latest-data">
       <tbody repeat.each="{{databases}}" repeat.as="db">
@@ -48,7 +56,6 @@
 <script src="http://code.jquery.com/jquery.js"></script>
 <script src="./paperclip.js"></script>
 <script src="./app.js"></script>
-<script src="https://cdn.rawgit.com/paulirish/memory-stats.js/master/memory-stats.js"></script>
 
 <script>
   var $app = $("#app");
@@ -107,18 +114,5 @@
   }
   load();
 </script>
-
-<!--script>
-  var stats = new MemoryStats();
-  stats.domElement.style.position = 'fixed';
-  stats.domElement.style.right        = '0px';
-  stats.domElement.style.bottom       = '0px';
-  document.body.appendChild( stats.domElement );
-  requestAnimationFrame(function rAFloop(){
-      stats.update();
-      requestAnimationFrame(rAFloop);
-  });
-</script-->
-
 </body>
 </html>
