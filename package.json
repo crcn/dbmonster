@@ -18,10 +18,10 @@
   },
   "homepage": "https://github.com/crcn/dbmonster",
   "dependencies": {
-    "paperclip": "^1.4.2"
+    "paperclip": "^1.4.2",
+    "node-static": "^0.7.6"
   },
   "devDependencies": {
-    "mocha": "^2.1.0",
-    "node-static": "^0.7.6"
+    "mocha": "^2.1.0"
   }
 }
