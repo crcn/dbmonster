@@ -26,6 +26,7 @@
             {{~db.name}}
           </td>
 
+          <!-- abba -->
           <td class="query-count">
             <span class="{{~db | sampleLength | countClassName}}">
               {{~db | sampleLength}}
@@ -108,7 +109,7 @@
   function load () {
     controller.load();
     view.accessor.apply();
-    setTimeout(load, 0);
+    setTimeout(load, ENV.timeout);
   }
   load();
 </script>

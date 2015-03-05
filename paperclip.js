@@ -55,6 +55,7 @@ var _set         = require("../utils/set");
 function POJOAccessor() {
   BaseAccessor.call(this);
   this._getters  = {};
+  this._callers  = {};
   this._watchers = [];
 }
 
@@ -70,16 +71,20 @@ module.exports = BaseAccessor.extend(POJOAccessor, {
 
   call: function(object, path, params) {
 
-    if (typeof path === "string") path = path.split(".");
+    var caller;
 
-    var fnName = path.pop();
-    var fnCtx  = path.length ? this.get(object, path) : object;
-    var fn     = fnCtx[fnName];
+    if (!(caller = this._callers[path])) {
+      var ctxPath = ["this"].concat(path.split("."));
+      ctxPath.pop();
+      ctxPath = ctxPath.join(".");
+      caller = this._callers[path] = new Function("params", "return this." + path + ".apply(" + ctxPath + ", params);");
+    }
 
-    if (!fn) return;
-    var ret = fn.apply(fnCtx, params);
-    this.applyChanges();
-    return ret;
+    try {
+      return caller.call(object, params);
+    } catch (e) {
+      return void 0;
+    }
   },
 
   /**
@@ -87,9 +92,7 @@ module.exports = BaseAccessor.extend(POJOAccessor, {
 
   get: function(object, path) {
 
-    if (typeof path === "string") path = path.split(".");
-
-    var pt = path.join(".");
+    var pt = typeof path !== "string" ? path.join(".") : path;
     var getter;
 
     if (!(getter = this._getters[pt])) {
@@ -1409,7 +1412,6 @@ BaseExpression.extend(AssignmentExpression, {
 
     var path = this.reference.path.join(".");
 
-
     return "this.set('" + path + "', " + this.value.toJavaScript() + ")";
   }
 });
@@ -1523,11 +1525,11 @@ BaseExpression.extend(CallExpression, {
 
     var buffer = "this.call(";
 
-    buffer += "[" + path.map(function(name) {
-      return "\"" + name + "\"";
-    }).join(",") + "]";
+
+    buffer += "'" + path.join(".") + "'";
 
     buffer += ", [" + this.parameters.toJavaScript() + "]";
+
 
     return buffer + ")";
   }
@@ -1759,7 +1761,6 @@ BaseExpression.extend(ReferenceExpression, {
     // var path = this.path.map(function(p) { return "'" + p + "'"; }).join(", ");
 
     var path = this.path.join(".");
-
 
     if (this._isBoundTo) {
       return "this.reference('" + path + "', " + (this.bindingType !== "<~") + ")";
@@ -2637,11 +2638,11 @@ module.exports = (function() {
       if (s2 === peg$FAILED) {
         s2 = peg$parseElementNode();
         if (s2 === peg$FAILED) {
-          s2 = peg$parseTextNode();
+          s2 = peg$parseCommentNode();
           if (s2 === peg$FAILED) {
-            s2 = peg$parseBlockBinding();
+            s2 = peg$parseTextNode();
             if (s2 === peg$FAILED) {
-              s2 = peg$parseCommentNode();
+              s2 = peg$parseBlockBinding();
             }
           }
         }
@@ -2652,11 +2653,11 @@ module.exports = (function() {
         if (s2 === peg$FAILED) {
           s2 = peg$parseElementNode();
           if (s2 === peg$FAILED) {
-            s2 = peg$parseTextNode();
+            s2 = peg$parseCommentNode();
             if (s2 === peg$FAILED) {
-              s2 = peg$parseBlockBinding();
+              s2 = peg$parseTextNode();
               if (s2 === peg$FAILED) {
-                s2 = peg$parseCommentNode();
+                s2 = peg$parseBlockBinding();
               }
             }
           }
@@ -6728,24 +6729,6 @@ protoclass(View, {
   /**
    */
 
-  watch: function(keypath, listener) {
-    var watcher = this.accessor.watchProperty(this.context, keypath, listener);
-    var property = keypath.join(".");
-    var collection = this._watchers[property];
-    if (!collection) {
-      collection = this._watchers[property] = [];
-    }
-    collection.push(watcher);
-    var self = this;
-    return {
-      dispose: function () {
-        var i = collection.indexOf(watcher);
-        if (~i) collection.splice(i, 1);
-        watcher.dispose();
-      },
-      trigger: watcher.trigger
-    };
-  },
    watch: function(keypath, listener) {
     return this.accessor.watchProperty(this.context, keypath, listener);
   },
@@ -7756,7 +7739,7 @@ nofactor       = require("nofactor");
 // instead of calling toFragment() each time. perhaps 
 var Section = function (nodeFactory, start, end) {
 
-  this.nodeFactory = nodeFactory = nodeFactory || nofactor["default"];
+  this.nodeFactory = nodeFactory = nodeFactory || nofactor;
 
   // create invisible markers so we know where the sections are
 

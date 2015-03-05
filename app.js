@@ -100,6 +100,7 @@ function getLastSample(db) {
 
 
 var controller = {
+  test: function(){},
 	getLastSampleLength: function(db) {
       return getLastSample(db).queries.length;
     },
