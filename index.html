@@ -10,7 +10,7 @@
 <body>
 
   <div id="link">
-    You're looking at DBMonster rendered with <a href="http://paperclipjs.com">PaperclipJS.</a><br> 
+    You're looking at DBMonster rendered with <a href="http://paperclipjs.com">PaperclipJS.</a><br>
     <a href="https://github.com/crcn/dbmonster/blob/master/index.html">View Source Code</a>
     <hr />
     <a href="http://jashkenas.github.io/dbmonster/">Underscore DBMonster</a><br>
@@ -20,40 +20,42 @@
 
   <script type="x-paperclip" id="main-template">
     <table class="table table-striped latest-data">
-      <tbody repeat.each="{{databases}}" repeat.as="db">
-        <tr>
-          <td class="dbname">
-            {{~db.name}}
-          </td>
-
-          <!-- abba -->
-          <td class="query-count">
-            <span class="{{~db | sampleLength | countClassName}}">
-              {{~db | sampleLength}}
-            </span>
-          </td>
-
-          <repeat each="{{~db.topFiveQueries}}" as="q">
-            <td class="{{~q.elapsed|elapsedClassName}}">
-              {{~q.elapsed | formatElapsed }}
-              <div class="popover left">
-                <div class="popover-content">
-                  {{~q.query}}
-                </div>
-                <div class="arrow"></div>
-              </div>
+      <repeat each="{{databases}}" as="db">
+        <tbody>
+          <tr>
+            <td class="dbname">
+              {{db.name}}
             </td>
-          </repeat>
-        </tr>
-      </tbody>
+
+            <!-- abba -->
+            <td class="query-count">
+              <span class="{{db | sampleLength | countClassName}}">
+                {{db | sampleLength}}
+              </span>
+            </td>
+
+            <repeat each="{{db.topFiveQueries}}" as="q">
+              <td class="{{q.elapsed|elapsedClassName}}">
+                {{q.elapsed | formatElapsed }}
+                <div class="popover left">
+                  <div class="popover-content">
+                    {{q.query}}
+                  </div>
+                  <div class="arrow"></div>
+                </div>
+              </td>
+            </repeat>
+          </tr>
+        </tbody>
+      </repeat>
     </table>
   </script>
-  
+
   <div id="app">
   </div>
 
 <script src="http://code.jquery.com/jquery.js"></script>
-<script src="./paperclip.js?ab"></script>
+<script src="./paperclip.js?abc"></script>
 <script src="./app.js"></script>
 
 <script>
@@ -109,8 +111,9 @@
 
   function load () {
     controller.load();
-    view.accessor.apply();
-    setTimeout(load, ENV.timeout);
+    view.update(controller);
+    // setTimeout(load, ENV.timeout);
+    requestAnimationFrame(load);
   }
   load();
 </script>
