@@ -112,7 +112,8 @@
   function load () {
     controller.load();
     view.update(controller);
-    setTimeout(load, ENV.timeout);
+    // setTimeout(load, ENV.timeout);
+    requestAnimationFrame(load);
   }
   load();
 </script>
