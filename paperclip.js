@@ -5,21 +5,637 @@
  */
 
 module.exports = {
-  template: require("./template"),
+  template    : require(24),
+  transpile   : require(26).transpile,
+  Attribute   : require(3),
+  Component   : require(18),
   noConflict: function() {
     delete global.paperclip;
   }
 };
 
-
 if (typeof window !== "undefined") {
   window.paperclip = module.exports;
-};
+}
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"./template":6}],2:[function(require,module,exports){
-var extend     = require("xtend/mutable");
-var transpiler = require("./transpiler");
+},{"18":18,"24":24,"26":26,"3":3}],2:[function(require,module,exports){
+var extend       = require(48);
+
+function POJOAccessor() {
+  this._getters  = {};
+  this._callers  = {};
+  this._watchers = [];
+}
+
+function _set(target, keypath, value) {
+
+  var keys = typeof keypath === "string" ? keypath.split(".") : keypath;
+  var ct   = target;
+  var key;
+
+  for (var i = 0, n = keys.length - 1; i < n; i++) {
+    key = keys[i];
+    if (!ct[key]) {
+      ct[key] = {};
+    }
+    ct = ct[key];
+  }
+
+  ct[keys[keys.length - 1]] = value;
+  return value;
+}
+
+extend(POJOAccessor.prototype, {
+
+  /**
+   */
+
+  call: function(object, keypath, params) {
+
+    var caller;
+
+    if (!(caller = this._callers[keypath])) {
+      var ctxPath = ["this"].concat(keypath.split("."));
+      ctxPath.pop();
+      ctxPath = ctxPath.join(".");
+      caller = this._callers[keypath] = new Function("params", "return this." + keypath + ".apply(" + ctxPath + ", params);");
+    }
+
+    try {
+      var ret = caller.call(object, params);
+      this.applyChanges(object);
+      return ret;
+    } catch (e) {
+      return void 0;
+    }
+  },
+
+  /**
+   */
+
+  get: function(object, path) {
+
+    var pt = typeof path !== "string" ? path.join(".") : path;
+    var getter;
+
+    if (!(getter = this._getters[pt])) {
+      getter = this._getters[pt] = new Function("return this." + pt);
+    }
+
+    // is undefined - fugly, but works for this test.
+    try {
+      return getter.call(object);
+    } catch (e) {
+      return void 0;
+    }
+  },
+
+  /**
+   */
+
+  set: function(object, path, value) {
+
+    if (typeof path === "string") path = path.split(".");
+
+    var ret = _set(object, path, value);
+
+    this.applyChanges(object);
+
+    return ret;
+  },
+
+  /**
+   */
+
+  watch: function(object, listener) {
+
+    var self = this;
+    var currentValue;
+    var firstCall = true;
+
+    return this._addWatcher(function(changedObject) {
+      if (changedObject === object) listener();
+    });
+  },
+
+  /**
+   */
+
+  _addWatcher: function(applyChanges) {
+
+    var self = this;
+
+    var watcher = {
+      apply: applyChanges,
+      trigger: applyChanges,
+      dispose: function() {
+        var i = self._watchers.indexOf(watcher);
+        if (~i) self._watchers.splice(i, 1);
+      }
+    };
+
+    this._watchers.push(watcher);
+
+    return watcher;
+  },
+
+  /**
+   */
+
+  applyChanges: function(object) {
+    for (var i = 0, n = this._watchers.length; i < n; i++) {
+      this._watchers[i].apply(object);
+    }
+  }
+});
+
+/**
+ */
+
+module.exports = POJOAccessor;
+
+},{"48":48}],3:[function(require,module,exports){
+var protoclass = require(47);
+
+/**
+ */
+
+function Base(ref, key, value, view) {
+  this.ref      = ref;
+  this.node     = ref; // DEPRECATED
+  this.key      = key;
+  this.value    = value;
+  this.view     = view;
+  this.template = view.template;
+  this.document = view.template.options.document;
+  this.initialize();
+}
+
+/**
+ */
+
+protoclass(Base, {
+  initialize: function() {
+  },
+  update: function() {
+  }
+});
+
+/**
+ */
+
+module.exports = Base;
+
+},{"47":47}],4:[function(require,module,exports){
+var BaseAttribute = require(3);
+
+/**
+ */
+
+module.exports = BaseAttribute.extend({
+
+  /**
+   */
+
+  update: function() {
+
+    var classes = this.value;
+
+    if (typeof classes === "string") {
+      return this.node.setAttribute("class", classes);
+    }
+
+    if (!classes) {
+      return this.node.removeAttribute("class");
+    }
+
+    var classesToUse = this.node.getAttribute("class");
+    classesToUse     = classesToUse ? classesToUse.split(" ") : [];
+
+    for (var classNames in classes) {
+
+      var useClass = classes[classNames];
+      var classNamesArray = classNames.split(/[,\s]+/g);
+
+      for (var i = 0, n = classNamesArray.length; i < n; i++) {
+        var className = classNamesArray[i];
+
+        var j = classesToUse.indexOf(className);
+        if (useClass) {
+          if (!~j) {
+            classesToUse.push(className);
+          }
+        } else if (~j) {
+          classesToUse.splice(j, 1);
+        }
+      }
+    }
+
+    this.node.setAttribute("class", classesToUse.join(" "));
+  }
+});
+
+module.exports.test = function(vnode, key, value) {
+  return typeof value !== "string";
+};
+
+},{"3":3}],5:[function(require,module,exports){
+var KeyCodedEventAttribute = require(14);
+
+/**
+ */
+
+module.exports = KeyCodedEventAttribute.extend({
+  keyCodes: [8]
+});
+
+},{"14":14}],6:[function(require,module,exports){
+var BaseAttribue = require(3);
+
+/**
+ */
+
+module.exports = BaseAttribue.extend({
+  initialize: function() {
+    this.view.transitions.push(this);
+  },
+  enter: function() {
+    this.value.call(this.view, this.node, function() { });
+  }
+});
+
+},{"3":3}],7:[function(require,module,exports){
+var BaseAttribue = require(3);
+
+/**
+ */
+
+module.exports = BaseAttribue.extend({
+  initialize: function() {
+    this.view.transitions.push(this);
+  },
+  exit: function(complete) {
+    this.value.call(this.view, this.node, complete);
+  }
+});
+
+},{"3":3}],8:[function(require,module,exports){
+var BaseAttribute = require(3);
+
+/**
+ */
+
+module.exports = BaseAttribute.extend({
+  value: true,
+  initialize: function() {
+    this.update();
+  },
+  update: function() {
+    if (this.value !== false) {
+      this.node.removeAttribute("disabled");
+    } else {
+      this.node.setAttribute("disabled", "disabled");
+    }
+  }
+});
+
+},{"3":3}],9:[function(require,module,exports){
+var KeyCodedEventAttribute = require(14);
+
+/**
+ */
+
+module.exports = KeyCodedEventAttribute.extend({
+  keyCodes: [13]
+});
+
+},{"14":14}],10:[function(require,module,exports){
+var KeyCodedEventAttribute = require(14);
+
+/**
+ */
+
+module.exports = KeyCodedEventAttribute.extend({
+  keyCodes: [27]
+});
+
+},{"14":14}],11:[function(require,module,exports){
+var Base   = require(3);
+
+/**
+ */
+
+module.exports = Base.extend({
+  initialize: function() {
+    if (!this.event) this.event = this.key.match(/on(.+)/)[1].toLowerCase();
+    this.ref.addEventListener(this.event, this._onEvent.bind(this));
+  },
+  _onEvent: function(event) {
+    this.value(event);
+  }
+});
+
+},{"3":3}],12:[function(require,module,exports){
+(function (process){
+var BaseAttribute = require(3);
+
+/**
+ */
+
+module.exports = BaseAttribute.extend({
+
+  /**
+   */
+
+  update: function() {
+    if (!this.value) return;
+    if (this.node.focus) {
+      var self = this;
+
+      if (!process.browser) return this.node.focus();
+
+      // focus after being on screen. Need to break out
+      // of animation, so setTimeout is the best option
+      setTimeout(function() {
+        self.node.focus();
+      }, 1);
+    }
+  }
+});
+
+}).call(this,require(31))
+},{"3":3,"31":31}],13:[function(require,module,exports){
+
+module.exports = {
+  onClick       : require(11),
+  onDoubleClick : require(11),
+  onLoad        : require(11),
+  onSubmit      : require(11),
+  onMouseDown   : require(11),
+  onMouseMove   : require(11),
+  onMouseUp     : require(11),
+  onChange      : require(11),
+  onMouseOver   : require(11),
+  onMouseOut    : require(11),
+  onFocusIn     : require(11),
+  onFocusOut    : require(11),
+  onKeyDown     : require(11),
+  onKeyUp       : require(11),
+  onDragStart   : require(11),
+  onDragStop    : require(11),
+  onDragEnd     : require(11),
+  onDragOver    : require(11),
+  onDragEnter   : require(11),
+  onDragLeave   : require(11),
+  onDrop        : require(11),
+  onSelectStart : require(11),
+  onEnter       : require(9),
+  onDelete      : require(5),
+  focus         : require(12),
+  onEscape      : require(10),
+  class         : require(4),
+  style         : require(15),
+  value         : require(16),
+  checked       : require(16),
+  easeIn        : require(6),
+  easeOut       : require(7),
+  enable        : require(8)
+};
+
+},{"10":10,"11":11,"12":12,"15":15,"16":16,"4":4,"5":5,"6":6,"7":7,"8":8,"9":9}],14:[function(require,module,exports){
+var EventAttribute = require(11);
+
+/**
+ */
+
+module.exports = EventAttribute.extend({
+
+  /**
+   */
+
+  event: "keydown",
+
+  /**
+   */
+
+  keyCodes: [],
+
+  /**
+   */
+
+  _onEvent: function(event) {
+
+    if (!~this.keyCodes.indexOf(event.keyCode)) {
+      return;
+    }
+
+    EventAttribute.prototype._onEvent.apply(this, arguments);
+  }
+});
+
+},{"11":11}],15:[function(require,module,exports){
+var BaseAttribute = require(3);
+
+/**
+ */
+
+module.exports = BaseAttribute.extend({
+
+  /**
+   */
+
+  initialize: function() {
+    this._currentStyles = {};
+  },
+
+  /**
+   */
+
+  update: function() {
+
+    var styles = this.value;
+
+    if (typeof styles === "string") {
+      this.node.setAttribute("style", styles);
+      return;
+    }
+
+    var newStyles = {};
+
+    for (var name in styles) {
+      var style = styles[name];
+      if (style !== this._currentStyles[name]) {
+        newStyles[name] = this._currentStyles[name] = style || "";
+      }
+    }
+
+    for (var key in newStyles) {
+      this.node.style[key] = newStyles[key];
+    }
+  }
+});
+
+/**
+ */
+
+
+module.exports.test = function(vnode, key, value) {
+  return typeof value !== "string";
+};
+
+},{"3":3}],16:[function(require,module,exports){
+var BaseAttribute = require(3);
+var _bind         = require(28);
+
+/**
+ */
+
+module.exports = BaseAttribute.extend({
+
+  /**
+   */
+
+  _events: ["change", "keyup", "input"],
+
+  /**
+   */
+
+  initialize: function() {
+    this._onInput = _bind(this._onInput, this);
+    var self = this;
+    this._events.forEach(function(event) {
+      self.node.addEventListener(event, self._onInput);
+    });
+  },
+
+  /**
+   */
+
+  // bind: function() {
+  //   BaseAttribute.prototype.bind.call(this);
+  //
+  //   var self = this;
+  //
+  //   // TODO - move this to another attribute helper (more optimal)
+  //   if (/^(text|password|email)$/.test(this.node.getAttribute("type"))) {
+  //     this._autocompleteCheckInterval = setInterval(function() {
+  //       self._onInput();
+  //     }, process.browser ? 500 : 10);
+  //   }
+  // },
+
+  /**
+   */
+
+  // unbind: function() {
+  //   BaseAttribute.prototype.unbind.call(this);
+  //   clearInterval(this._autocompleteCheckInterval);
+  //
+  //   var self = this;
+  // },
+
+  /**
+   */
+
+  update: function() {
+
+    var model = this.model = this.value;
+
+    if (!model) return;
+
+    if (!model || !model.__isReference) {
+      throw new Error("input value must be a reference. Make sure you have <~> defined");
+    }
+
+    if (model.gettable) {
+      this._elementValue(this._parseValue(model.value()));
+    }
+  },
+
+  _parseValue: function(value) {
+    if (value == null || value === "") return void 0;
+    return value;
+  },
+
+  /**
+   */
+
+  _onInput: function(event) {
+
+    clearInterval(this._autocompleteCheckInterval);
+
+    // ignore some keys
+    if (event && (!event.keyCode || !~[27].indexOf(event.keyCode))) {
+      event.stopPropagation();
+    }
+
+    var value = this._parseValue(this._elementValue());
+
+    if (!this.model) return;
+
+    if (String(this.model.value()) == String(value))  return;
+
+    this.model.value(value);
+  },
+
+  /**
+   */
+
+  _elementValue: function(value) {
+
+    var isCheckbox        = /checkbox/.test(this.node.type);
+    var isRadio           = /radio/.test(this.node.type);
+    var isRadioOrCheckbox = isCheckbox || isRadio;
+    var hasValue          = Object.prototype.hasOwnProperty.call(this.node, "value");
+    var isInput           = hasValue || /input|textarea|checkbox/.test(this.node.nodeName.toLowerCase());
+
+    if (!arguments.length) {
+      if (isCheckbox) {
+        return Boolean(this.node.checked);
+      } else if (isInput) {
+        return this.node.value || "";
+      } else {
+        return this.node.innerHTML || "";
+      }
+    }
+
+    if (value == null) {
+      value = "";
+    } else {
+      clearInterval(this._autocompleteCheckInterval);
+    }
+
+    if (isRadioOrCheckbox) {
+      if (isRadio) {
+        if (String(value) === String(this.node.value)) {
+          this.node.checked = true;
+        }
+      } else {
+        this.node.checked = value;
+      }
+    } else if (String(value) !== this._elementValue()) {
+
+      if (isInput) {
+        this.node.value = value;
+      } else {
+        this.node.innerHTML = value;
+      }
+    }
+  }
+});
+
+/**
+ */
+
+
+module.exports.test = function(vnode, key, value) {
+  return typeof value !== "string";
+};
+
+},{"28":28,"3":3}],17:[function(require,module,exports){
+var extend     = require(48);
+var transpiler = require(26);
 
 /**
  */
@@ -34,8 +650,8 @@ extend(Compiler.prototype, {
   /**
    */
 
-  compile: function(source) {
-    var js = transpiler.transpile(source);
+  compile: function(source, options) {
+    var js = transpiler.transpile(source, options);
     return new Function("return " + js)();
   }
 });
@@ -45,22 +661,31 @@ extend(Compiler.prototype, {
 
 module.exports = new Compiler();
 
-},{"./transpiler":7,"xtend/mutable":24}],3:[function(require,module,exports){
-module.exports = {
-  repeat: require("./repeat")
+},{"26":26,"48":48}],18:[function(require,module,exports){
+var protoclass = require(47);
+
+function Component() {
+
 };
 
-},{"./repeat":4}],4:[function(require,module,exports){
-var extend = require("xtend/mutable");
-var ivd    = require("ivd");
+module.exports = Component;
+
+},{"47":47}],19:[function(require,module,exports){
+module.exports = {
+  repeat: require(20)
+};
+
+},{"20":20}],20:[function(require,module,exports){
+var extend = require(48);
+var ivd    = require(40);
 
 /**
  */
 
-function Repeat(section, vnode, attributes, options) {
+function Repeat(section, vnode, attributes, view) {
   extend(this, attributes);
   this.section    = section;
-  this._cTemplate  = ivd.template(vnode, options);
+  this._cTemplate  = ivd.template(vnode, view.template.options);
   this._children   = [];
 }
 
@@ -68,10 +693,16 @@ function Repeat(section, vnode, attributes, options) {
  */
 
 function _each(target, iterate) {
-  if (Object.prototype.toString.call(target) === "[object Array]") {
-    for (var i = 0, n = target.length; i < n; i++) iterate(target[i], i);
+
+  if (!target) return;
+
+  if (target.forEach) {
+    // use API here since target could be an object
+    target.forEach(iterate);
   } else {
-    for (var key in target) iterate(target[key], key);
+    for (var key in target) {
+      if (target.hasOwnProperty(key)) iterate(target[key], key);
+    }
   }
 }
 
@@ -90,34 +721,37 @@ extend(Repeat.prototype, {
   /**
    */
 
-  update: function() {
+  update: function(parent) {
 
     var as       = this.as;
     var each     = this.each;
+    var key      = this.key || "key";
 
     var n        = 0;
     var self     = this;
 
     var properties;
 
-    _each(each, function(model, key) {
+    _each(each, function(model, k) {
+
+      var child;
 
       if (as) {
         properties       = { };
-        properties[key]  = key;
+        properties[key]  = k;
         properties[as]   = model;
       } else {
         properties = model;
       }
 
-      // var child = this.cTemplate.view(ctx);
-
       if (n >= self._children.length) {
-        var child = self._cTemplate.view(properties);
+        child = self._cTemplate.view(properties, {
+          parent: parent
+        });
         self._children.push(child);
         self.section.appendChild(child.render());
       } else {
-        var child = self._children[n];
+        child = self._children[n];
         child.update(properties);
       }
 
@@ -135,7 +769,99 @@ extend(Repeat.prototype, {
 
 module.exports = Repeat;
 
-},{"ivd":16,"xtend/mutable":24}],5:[function(require,module,exports){
+},{"40":40,"48":48}],21:[function(require,module,exports){
+var extend = require(48);
+
+module.exports = function(initialize, update) {
+
+  if (!update) update = function() { };
+
+  /**
+   */
+
+  function Binding(ref, view) {
+    this.ref              = ref;
+    this.view             = view;
+    this.template         = view.template;
+    this.options          = this.template.options;
+    this.attributeClasses = this.options.attributes || {};
+    this.initialize();
+    this.attrBindings     = {};
+  }
+
+  /**
+   */
+
+  extend(Binding.prototype, {
+
+    /**
+     */
+
+    initialize: initialize || function() { },
+
+    /**
+     */
+
+    update2: update || function() { },
+
+    /**
+     */
+
+    setAttribute: function(key, value) {
+      if (!this.setAsRegisteredAttribute(key, value)) {
+        if (value != void 0) {
+          this.ref.setAttribute(key, value);
+        } else {
+          this.ref.removeAttribute(key);
+        }
+      }
+    },
+
+    /**
+     */
+
+    setProperty: function(key, value) {
+      if (!this.setAsRegisteredAttribute(key, value)) {
+        if (value != void 0) {
+          this.ref[key] = value;
+        } else {
+          this.ref[key] = void 0;
+        }
+      }
+    },
+
+    /**
+     */
+
+    setAsRegisteredAttribute: function(key, value) {
+      if (this.attrBindings[key]) {
+        this.attrBindings[key].value = value;
+      } else {
+        var attrClass = this.attributeClasses[key];
+        if (attrClass) {
+          this.attrBindings[key] = new attrClass(this.ref, key, value, this.view);
+        } else {
+          return false;
+        }
+      }
+      return true;
+    },
+
+    /**
+     */
+
+    update: function(view) {
+      this.update2(view);
+      for(var key in this.attrBindings) {
+        this.attrBindings[key].update(view);
+      }
+    }
+  });
+
+  return Binding;
+};
+
+},{"48":48}],22:[function(require,module,exports){
 module.exports = (function() {
   /*
    * Generated by PEG.js 0.8.0.
@@ -467,7 +1193,7 @@ module.exports = (function() {
                   value: value
                 };
               },
-          function(key) { return key.value; },
+          function(key) { return key[1]; },
           function(key) { return key; },
           { type: "other", description: "string" },
           function(chars) {
@@ -1044,27 +1770,136 @@ module.exports = (function() {
     parse:       parse
   };
 })();
-},{}],6:[function(require,module,exports){
-var ivd               = require("ivd");
-var compiler          = require("./compiler");
-var extend            = require("xtend/mutable");
-var defaultComponents = require("./components");
+},{}],23:[function(require,module,exports){
+var protoclass = require(47);
+
+/**
+ */
+
+function Reference(view, path, gettable, settable) {
+  this.view     = view;
+  this.path     = path;
+  this.settable = settable !== false;
+  this.gettable = gettable !== false;
+}
+
+/**
+ */
+
+protoclass(Reference, {
+
+  /**
+   */
+
+  __isReference: true,
+
+  /**
+   */
+
+  value: function(value) {
+    if (!arguments.length) {
+      return this.gettable ? this.view.get(this.path) : void 0;
+    }
+    if (this.settable) this.view.set(this.path, value);
+  },
+
+  /**
+   */
+
+  toString: function() {
+    return this.view.get(this.path);
+  }
+});
+
+module.exports = Reference;
+
+},{"47":47}],24:[function(require,module,exports){
+var ivd                = require(40);
+var compiler           = require(17);
+var extend             = require(48);
+var defaultComponents  = require(19);
+var defaultAttributes  = require(13);
+var createBindingClass = require(21);
+var View               = require(30);
+
+
 
 /**
  */
 
 module.exports = function(source, options) {
-  var createVNode = typeof source === "string" ? compiler.compile(source) : source;
-  var vnode       = createVNode(ivd.fragment, ivd.element, ivd.text, ivd.comment, ivd.dynamic, ivd.root, ivd.reference);
+  var createVNode = typeof source === "string" ? compiler.compile(source, options) : source;
+  var vnode       = createVNode(ivd.fragment, ivd.element, ivd.text, ivd.comment, ivd.dynamic, createBindingClass);
+
+  if (!options) options = {};
+
+  if (!options.document && typeof document !== "undefined") {
+    options.document = document;
+  }
 
   return ivd.template(vnode, extend({
-    components: defaultComponents
+    components : defaultComponents,
+    attributes : defaultAttributes,
+    viewClass  : View
   }, options));
 };
 
-},{"./compiler":2,"./components":3,"ivd":16,"xtend/mutable":24}],7:[function(require,module,exports){
-var extend = require("xtend/mutable");
-var parser = require("./parser");
+},{"13":13,"17":17,"19":19,"21":21,"30":30,"40":40,"48":48}],25:[function(require,module,exports){
+(function (process){
+var protoclass = require(47);
+var async      = require(27);
+
+/**
+ */
+
+function Transitions() {
+  this._enter = [];
+  this._exit  = [];
+}
+
+/**
+ */
+
+module.exports = protoclass(Transitions, {
+
+  /**
+   */
+
+  push: function(transition) {
+    if (transition.enter) this._enter.push(transition);
+    if (transition.exit) this._exit.push(transition);
+  },
+
+  /**
+   */
+
+  enter: function() {
+    if (!this._enter.length) return false;
+    for (var i = 0, n = this._enter.length; i < n; i++) {
+      this._enter[i].enter();
+    }
+  },
+
+  /**
+   */
+
+  exit: function(complete) {
+    if (!this._exit.length) return false;
+    var self = this;
+    process.nextTick(function() {
+      async.each(self._exit, function(transition, next) {
+        transition.exit(next);
+      }, complete);
+    });
+
+    return true;
+  }
+});
+
+}).call(this,require(31))
+},{"27":27,"31":31,"47":47}],26:[function(require,module,exports){
+var extend = require(48);
+var parser = require(22);
 
 /**
  */
@@ -1075,8 +1910,18 @@ function Transpiler() {
       this[k] = this[k].bind(this);
     }
   }
+  this.transpile = this.transpile.bind(this);
 }
 
+/**
+ */
+
+function _dashToCamelCase(string) {
+  return string.split("-").map(function(part, i) {
+    var p = part.toLowerCase();
+    return i > 0 ? p.charAt(0).toUpperCase() + p.substr(1) : p;
+  }).join("");
+}
 /**
  */
 
@@ -1094,53 +1939,13 @@ extend(Transpiler.prototype, {
 
   _root: function(elements) {
 
-    this._refs       = {};
-    this._refCounter = 0;
-
-
-    var buffer = "function(fragment, element, text, comment, dynamic, root, reference) {";
-
+    var buffer = "function(fragment, element, text, comment, dynamic, createBindingClass) {";
     var fragment = "fragment(" + elements.map(this._expression).join(",") + ")";
-
-    // buffer += "return " + this.__bundleReferences(fragment);
-
     buffer += "return " + fragment;
-
     buffer += "}";
 
     return buffer;
   },
-
-  /**
-   */
-
-  //  __bundleReferences: function(buffer) {
-  //
-  //   if (!this._refCounter) return buffer;
-  //
-  //   buffer = "root(" + buffer + ", function(refs, context) {"
-  //
-  //   for (var refName in this._refs) {
-  //     this._refs[refName].forEach(function(ref) {
-  //
-  //       var type = ref[0];
-  //
-  //       buffer += "refs." + refName;
-  //
-  //       if(type === "block") {
-  //         buffer += ".nodeValue = " + this._expression(ref[1]) + ";"
-  //       } else if (type === "attribute") {
-  //         buffer += ".setAttribute('" + ref[1] + "', " + ref[2].map(this._expression).join("+") + ");";
-  //       } else if (type === "property") {
-  //         buffer += "." + ref[1] + "=" + this._expression(ref[2]);
-  //       }
-  //     }.bind(this));
-  //   }
-  //
-  //   buffer += "})";
-  //
-  //   return buffer;
-  // },
 
   /**
    */
@@ -1159,14 +1964,18 @@ extend(Transpiler.prototype, {
 
     buffer += ", {";
 
-    expression[2].forEach(function(attr) {
+    var attrs = [];
+
+    buffer += expression[2].map(function(attr) {
       var value = attr[2];
-      if (value.length === 1 && value[0][0] === "string") {
-        buffer += "'" + attr[1] + "':" + this._expression(value[0]);
+      if (!value.length || (value.length === 1 && value[0][0] === "string")) {
+        return "'" + attr[1] + "':" + (value.length ? this._expression(value[0]) : "true");
       } else {
         dynamicAttributes.push(attr);
       }
-    }.bind(this));
+    }.bind(this)).filter(function(str) {
+      return !!str;
+    }).join(",");
 
     buffer += "}";
 
@@ -1180,24 +1989,43 @@ extend(Transpiler.prototype, {
 
     if (dynamicAttributes.length) {
 
-      buffer = "dynamic(" + buffer + ", function(ref, context) {";
+      var dynamicAttrBuffer = "";
+      var staticAttrBuffer  = "";
 
-      dynamicAttributes.forEach(function(ref) {
+      dynamicAttributes.forEach(function(expression) {
 
-        var type = ref[0];
+        var type = expression[0];
+        // var key  = _dashToCamelCase(expression[1]);
 
-        buffer += "ref";
-
-        if(type === "block") {
-          buffer += ".nodeValue = " + this._expression(ref[1]) + ";"
+        dynamicAttrBuffer += "this";
+        if (type === "block") {
+          dynamicAttrBuffer += ".ref.nodeValue = " + this._expression(expression[1]);
         } else if (type === "attribute") {
-          buffer += ".setAttribute('" + ref[1] + "', " + ref[2].map(this._expression).join("+") + ");";
+          var value = expression[2].map(this._expression).join("+");
+          if (value == "") {
+            value = "true";
+          }
+          dynamicAttrBuffer += ".setAttribute('" + expression[1] + "', " + value + ");";
         } else if (type === "property") {
-          buffer += "." + ref[1] + "=" + this._expression(ref[2]);
+          // dynamicAttrBuffer += ".ref." + expression[1] + "=" + this._expression(expression[2]);
+          dynamicAttrBuffer += ".setProperty('" + expression[1] + "', " + this._expression(expression[2]) + ");";
         }
       }.bind(this));
 
-      buffer += "})";
+      if (dynamicAttrBuffer.length) {
+        dynamicAttrBuffer = "function(view) {" + dynamicAttrBuffer + "}";
+      }
+
+      if (staticAttrBuffer.length) {
+        staticAttrBuffer = "function() { var self = this; " + staticAttrBuffer + "}";
+      }
+
+      if (dynamicAttrBuffer.length || staticAttrBuffer.length) {
+        buffer  = "dynamic(" + buffer + ",";
+        buffer += "createBindingClass(" + (staticAttrBuffer.length ? staticAttrBuffer : "void 0") + ", " + (dynamicAttrBuffer ? dynamicAttrBuffer : "void 0") + ")";
+        buffer += ")";
+      }
+
     }
 
     return buffer;
@@ -1216,10 +2044,11 @@ extend(Transpiler.prototype, {
    */
 
   _block: function(expression) {
-    var buffer = "dynamic(text(), function(ref, context) {";
-    buffer += "ref.nodeValue = " + this._expression(expression[1]) + ";"
 
-    return buffer + "})";
+    // TODO - check for unbound expressions here
+    var buffer = "dynamic(text(), createBindingClass(void 0, function(view) {";
+    buffer += "this.ref.nodeValue = " + this._expression(expression[1]) + ";";
+    return buffer + "}))";
   },
 
   /**
@@ -1239,6 +2068,22 @@ extend(Transpiler.prototype, {
   /**
    */
 
+  _hash: function(expression) {
+
+    var items = expression[1];
+
+    var buffer = [];
+
+    for (var key in items) {
+      buffer.push("'" + key + "':" + this._expression(items[key]));
+    }
+
+    return "{" + buffer.join(",") + "}";
+  },
+
+  /**
+   */
+
   _script: function(expression) {
     return this._expression(expression[1]);
   },
@@ -1247,8 +2092,14 @@ extend(Transpiler.prototype, {
    */
 
   _reference: function(expression) {
-    var buffer = "context." + expression[1].join(".");
-    return buffer;
+    if (expression[2]) {
+
+      var gettable = !!~expression[2].indexOf("<~");
+      var settable = !!~expression[2].indexOf("~>");
+
+      return "view.ref('" + expression[1].join(".") + "', " + gettable + ", " + settable + ")";
+    }
+    return "view.get('" + expression[1].join(".") + "')";
   },
 
   /**
@@ -1299,9 +2150,9 @@ extend(Transpiler.prototype, {
    */
 
   _call: function(expression) {
-    var buffer = this._expression(expression[1]) + "(";
+    var buffer = "view.call('" + expression[1][1].join(".") + "', [";
     buffer += expression[2].map(this._expression).join(",");
-    return buffer + ")";
+    return buffer + "])";
   },
 
   /**
@@ -1316,6 +2167,32 @@ extend(Transpiler.prototype, {
 
   _group: function(expression) {
     return "(" + this._expression(expression[1]) + ")";
+  },
+
+  /**
+   */
+
+  __findExpressions: function(type, expr) {
+    var exprs = [];
+
+    this.__traverse(expr, function(expr) {
+      if (expr[0] === type) exprs.push(expr);
+    });
+
+    return exprs;
+  },
+
+  /**
+   */
+
+  __traverse: function(expr, iterator) {
+    iterator(expr);
+    expr.forEach(function(v) {
+      if (v && typeof v === "object") {
+        this.__traverse(v, iterator);
+      }
+    }.bind(this));
+
   }
 });
 
@@ -1324,10 +2201,241 @@ extend(Transpiler.prototype, {
 
 module.exports = new Transpiler();
 
-},{"./parser":5,"xtend/mutable":24}],8:[function(require,module,exports){
-var extend        = require("xtend/mutable");
-var getNodeByPath = require("./_getNodeByPath");
-var getNodePath   = require("./_getNodePath");
+},{"22":22,"48":48}],27:[function(require,module,exports){
+module.exports = {
+
+  /**
+   */
+
+  each: function(items, each, complete) {
+
+    var total     = items.length;
+    var completed = 0;
+
+    items.forEach(function(item) {
+      var called = false;
+      each(item, function() {
+        if (called) throw new Error("callback called twice");
+        called = true;
+        if (++completed === total && complete) complete();
+      });
+    });
+  }
+};
+
+},{}],28:[function(require,module,exports){
+module.exports = function(callback, context) {
+  if (callback.bind) return callback.bind.apply(callback, [context].concat(Array.prototype.slice.call(arguments, 2)));
+  return function() {
+    return callback.apply(context, arguments);
+  };
+};
+
+},{}],29:[function(require,module,exports){
+/* istanbul ignore next */
+function _stringifyNode(node) {
+
+  var buffer = "";
+
+  if (node.nodeType === 11) {
+    for (var i = 0, n = node.childNodes.length; i < n; i++) {
+      buffer += _stringifyNode(node.childNodes[i]);
+    }
+    return buffer;
+  }
+
+  buffer = node.nodeValue || node.outerHTML || "";
+
+  if (node.nodeType === 8) {
+    buffer = "<!--" + buffer + "-->";
+  }
+
+  return buffer;
+}
+
+module.exports = _stringifyNode;
+
+},{}],30:[function(require,module,exports){
+(function (global){
+var ivd            = require(40);
+var extend         = require(48);
+var BaseView       = ivd.View;
+var Accessor       = require(2);
+var _stringifyNode = require(29);
+var Transitions    = require(25);
+var Reference      = require(23);
+
+/**
+ */
+
+function PaperclipView(node, template, options) {
+
+  if (!options) options = {};
+
+  this.parent       = options.parent;
+  this.accessor     = this.parent ? this.parent.accessor : new Accessor();
+  this.transitions  = new Transitions();
+  this._remove      = this._remove.bind(this);
+
+  BaseView.call(this, node, template, options);
+}
+
+/**
+ */
+
+extend(PaperclipView.prototype, BaseView.prototype, {
+
+  /**
+   */
+
+  get: function(keypath) {
+    var v =  this.accessor.get(this.context, keypath);
+    return v != void 0 ? v : this.parent ? this.parent.get(keypath) : void 0;
+  },
+
+  /**
+   */
+
+  set: function(keypath, value) {
+    return this.accessor.set(this.context, keypath, value);
+  },
+
+  /**
+   */
+
+  ref: function(keypath, gettable, settable) {
+    if (!this._refs) this._refs = {};
+
+    return new Reference(this, keypath, gettable, settable);
+    // return this._refs[keypath] || (this._refs[keypath] = new Reference(this, keypath, gettable, settable));
+  },
+
+  /**
+   */
+
+  call: function(keypath, params) {
+    var v =  this.accessor.get(this.context, keypath);
+    return v != void 0 ? this.accessor.call(this.context, keypath, params) : this.parent ? this.parent.call(keypath, params) : void 0;
+  },
+
+  /**
+   */
+
+  update: function(context) {
+    this.context         = context;
+    BaseView.prototype.update.call(this, this);
+  },
+
+  /**
+   * for testing. TODO - move this stuff to sections instead.
+   */
+
+  toString: function() {
+
+    if (this.template.section.document === global.document) {
+      return _stringifyNode(this.section.start ? this.section.start.parentNode : this.section.node);
+    }
+
+    return (this.section.start ? this.section.start.parentNode : this.section.node).toString();
+  },
+
+  /**
+   */
+
+  render: function() {
+    var section = BaseView.prototype.render.call(this);
+    this.transitions.enter();
+    return section;
+  },
+
+  /**
+   */
+
+  remove: function() {
+    if (this.transitions.exit(this._remove)) return;
+    this._remove();
+    return this;
+  },
+
+  /**
+   */
+
+  _remove: function() {
+    BaseView.prototype.remove.call(this);
+    this.update(void 0);
+  }
+});
+
+/**
+ */
+
+module.exports = PaperclipView;
+
+}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
+},{"2":2,"23":23,"25":25,"29":29,"40":40,"48":48}],31:[function(require,module,exports){
+// shim for using process in browser
+
+var process = module.exports = {};
+var queue = [];
+var draining = false;
+
+function drainQueue() {
+    if (draining) {
+        return;
+    }
+    draining = true;
+    var currentQueue;
+    var len = queue.length;
+    while(len) {
+        currentQueue = queue;
+        queue = [];
+        var i = -1;
+        while (++i < len) {
+            currentQueue[i]();
+        }
+        len = queue.length;
+    }
+    draining = false;
+}
+process.nextTick = function (fun) {
+    queue.push(fun);
+    if (!draining) {
+        setTimeout(drainQueue, 0);
+    }
+};
+
+process.title = 'browser';
+process.browser = true;
+process.env = {};
+process.argv = [];
+process.version = ''; // empty string to avoid regexp issues
+process.versions = {};
+
+function noop() {}
+
+process.on = noop;
+process.addListener = noop;
+process.once = noop;
+process.off = noop;
+process.removeListener = noop;
+process.removeAllListeners = noop;
+process.emit = noop;
+
+process.binding = function (name) {
+    throw new Error('process.binding is not supported');
+};
+
+// TODO(shtylman)
+process.cwd = function () { return '/' };
+process.chdir = function (dir) {
+    throw new Error('process.chdir is not supported');
+};
+process.umask = function() { return 0; };
+
+},{}],32:[function(require,module,exports){
+var extend        = require(46);
+var getNodeByPath = require(33);
+var getNodePath   = require(34);
 
 /**
  */
@@ -1373,7 +2481,7 @@ extend(FragmentSection.prototype, {
     var current  = start.nextSibling;
     var end      = this.end;
 
-    while(current !== end) {
+    while (current !== end) {
       node.appendChild(current);
       current = start.nextSibling;
     }
@@ -1410,7 +2518,10 @@ extend(FragmentSection.prototype, {
       }
     }
 
-    return new FragmentSection(this.document, parentClone.childNodes[0], parentClone.childNodes[parentClone.childNodes.length - 1]);
+    var first = parentClone.childNodes[0];
+    var last  = parentClone.childNodes[parentClone.childNodes.length - 1];
+
+    return new FragmentSection(this.document, first, last);
   },
 
   /**
@@ -1420,7 +2531,7 @@ extend(FragmentSection.prototype, {
     var current = this.start;
     var end     = this.end.nextSibling;
     var children = [];
-    while(current !== end) {
+    while (current !== end) {
       children.push(current);
       current = current.nextSibling;
     }
@@ -1452,7 +2563,7 @@ extend(Marker.prototype, {
 
 module.exports = FragmentSection;
 
-},{"./_getNodeByPath":9,"./_getNodePath":10,"xtend/mutable":24}],9:[function(require,module,exports){
+},{"33":33,"34":34,"46":46}],33:[function(require,module,exports){
 module.exports = function(root, path) {
 
   var c = root;
@@ -1462,9 +2573,9 @@ module.exports = function(root, path) {
   }
 
   return c;
-}
+};
 
-},{}],10:[function(require,module,exports){
+},{}],34:[function(require,module,exports){
 module.exports = function(node) {
 
   var path = [];
@@ -1479,16 +2590,16 @@ module.exports = function(node) {
     p = p.parentNode;
 
     // virtual nodes - must be skipped
-    while(p && p.nodeType > 12) p = p.parentNode;
+    while (p && p.nodeType > 12) p = p.parentNode;
   }
 
   return path;
-}
+};
 
-},{}],11:[function(require,module,exports){
-var extend        = require("xtend/mutable");
-var getNodeByPath = require("./_getNodeByPath");
-var getNodePath   = require("./_getNodePath");
+},{}],35:[function(require,module,exports){
+var extend        = require(46);
+var getNodeByPath = require(33);
+var getNodePath   = require(34);
 
 /**
  */
@@ -1528,7 +2639,7 @@ extend(NodeSection.prototype, {
    */
 
   remove: function() {
-    this.node.parentNode.removeChild(this.node);
+    if (this.node.parentNode) this.node.parentNode.removeChild(this.node);
   },
 
   /**
@@ -1556,13 +2667,20 @@ extend(Marker.prototype, {
    */
 
   createSection: function(root) {
-    return new NodeSection(this.document, getNodeByPath(root, this.path));
+    return new NodeSection(this.document, this.findNode(root));
+  },
+
+  /**
+   */
+
+  findNode: function(root) {
+    return getNodeByPath(root, this.path);
   }
 });
 
 module.exports = NodeSection;
 
-},{"./_getNodeByPath":9,"./_getNodePath":10,"xtend/mutable":24}],12:[function(require,module,exports){
+},{"33":33,"34":34,"46":46}],36:[function(require,module,exports){
 /**
  */
 
@@ -1589,17 +2707,17 @@ module.exports = function(nodeValue) {
   return new Comment(nodeValue);
 };
 
-},{}],13:[function(require,module,exports){
-var extend        = require("xtend/mutable");
-var getNodePath   = require("./_getNodePath");
-var getNodeByPath = require("./_getNodeByPath");
+},{}],37:[function(require,module,exports){
+var extend        = require(46);
+var getNodePath   = require(34);
+var getNodeByPath = require(33);
 
 /**
  */
 
-function DynamicNode(vnode, handler) {
+function DynamicNode(vnode, bindingClass) {
   this.vnode            = vnode;
-  this.handler          = handler;
+  this.bindingClass     = bindingClass;
   this.vnode.parentNode = this;
 }
 
@@ -1620,7 +2738,7 @@ DynamicNode.prototype.freeze = function(options, hydrators) {
 DynamicNode.prototype.freezeComponent = function(options, hydrators) {
   var h2 = [];
   var element = this.vnode.freeze(options, h2);
-  hydrators.push(new ComponentHydrator(h2[0], this.handler, options));
+  hydrators.push(new ComponentHydrator(h2[0], this.bindingClass, options));
   return element;
 };
 
@@ -1629,17 +2747,17 @@ DynamicNode.prototype.freezeComponent = function(options, hydrators) {
 
 DynamicNode.prototype.freezeElement = function(options, hydrators) {
   var node = this.vnode.freeze(options, hydrators);
-  hydrators.push(new Hydrator(node, this.handler, options));
+  hydrators.push(new Hydrator(node, this.bindingClass, options));
   return node;
 };
 
 /**
  */
 
-function Hydrator(ref, handler, options) {
-  this.options = options;
-  this.ref     = ref;
-  this.handler = handler;
+function Hydrator(ref, bindingClass, options) {
+  this.options      = options;
+  this.ref          = ref;
+  this.bindingClass = bindingClass;
 }
 
 /**
@@ -1650,87 +2768,49 @@ extend(Hydrator.prototype, {
   /**
    */
 
-  hydrate: function(root, bindings) {
+  hydrate: function(root, view) {
     if (!this._refPath) this._refPath = getNodePath(this.ref);
-    bindings.push(new Binding(getNodeByPath(root, this._refPath), this.handler, this.options));
+    view.bindings.push(new this.bindingClass(getNodeByPath(root, this._refPath), view));
   }
 });
-
 /**
  */
 
-function Binding(ref, handler, options) {
-  this.ref     = ref;
-  this.handler = handler;
-  this.options = options;
-}
-
-/**
- */
-
-extend(Binding.prototype, {
-  update: function(context) {
-    this.handler.call(this, this.ref, context);
-  }
-});
-
-/**
- */
-
-function ComponentHydrator(hydrator, handler, options) {
-  this.options  = options;
-  this.hydrator = hydrator;
-  this.handler  = handler;
+function ComponentHydrator(hydrator, bindingClass, options) {
+  this.options       = options;
+  this.hydrator      = hydrator;
+  this.bindingClass  = bindingClass;
 }
 
 /**
  */
 
 extend(ComponentHydrator.prototype, {
-  hydrate: function(root, bindings) {
-    var b2 = [];
-    this.hydrator.hydrate(root, b2);
-    var component = b2[0];
-    bindings.push(new ComponentBinding(component, this.handler, this.options));
-    bindings.push(component);
+  hydrate: function(root, view) {
+    this.hydrator.hydrate(root, view);
+    var component = view.bindings[view.bindings.length - 1];
+    view.bindings.splice(view.bindings.indexOf(component), 0, new this.bindingClass(component, view));
   }
 });
 
 /**
  */
 
-function ComponentBinding(component, handler, options) {
-  this.component = component;
-  this.handler   = handler;
-  this.options   = options;
-}
-
-/**
- */
-
-extend(ComponentBinding.prototype, {
-  update: function(context) {
-    this.handler.call(this, this.component, context);
-  }
-});
-
-/**
- */
-
-module.exports = function(vnode, handler) {
-  return new DynamicNode(vnode, handler);
+module.exports = function(vnode, bindingClass) {
+  return new DynamicNode(vnode, bindingClass);
 };
 
-},{"./_getNodeByPath":9,"./_getNodePath":10,"xtend/mutable":24}],14:[function(require,module,exports){
-var createSection    = require("./section");
-var fragment         = require("./fragment");
-var FragmentSection  = require("./_fragmentSection");
+},{"33":33,"34":34,"46":46}],38:[function(require,module,exports){
+var createSection    = require(41);
+var fragment         = require(39);
+var FragmentSection  = require(32);
+var NodeSection      = require(35);
 
 /**
  */
 
 function Element(nodeName, attributes, childNodes) {
-  this.nodeName   = String(nodeName).toUpperCase();
+  this.nodeName   = String(nodeName).toLowerCase();
   this.attributes = attributes;
   this.childNodes = childNodes;
   for (var i = childNodes.length; i--;) childNodes[i].parentNode = this;
@@ -1747,40 +2827,46 @@ Element.prototype.nodeType = 1;
 Element.prototype.freeze = function(options, hydrators) {
 
   var components = options.components || {};
+  var attributes = options.attributes || {};
 
   if (components[this.nodeName]) {
-    return this.freezeComponent(components[this.nodeName], options, hydrators);
+    return this._freezeComponent(components[this.nodeName], options, hydrators);
   }
 
-
-  return this.freezeElement(options, hydrators);
+  return this._freezeElement(options, hydrators);
 };
 
 /**
  */
 
-Element.prototype.freezeComponent = function(clazz, options, hydrators) {
+Element.prototype._freezeComponent = function(clazz, options, hydrators) {
 
   // TODO - check parent node to see if there are anymore children. If not, then user NodeSection
   var section = new FragmentSection(options.document);
-  hydrators.push(new ComponentHydrator(clazz, section, fragment.apply(this, this.childNodes), this.attributes, options));
+  var frag    = fragment.apply(this, this.childNodes);
+  hydrators.push(new ComponentHydrator(clazz, section, frag, this._splitAttributes(options), options));
   return section.render();
 };
 
 /**
  */
 
-Element.prototype.freezeElement = function(options, hydrators) {
+Element.prototype._freezeElement = function(options, hydrators) {
 
   var element = options.document.createElement(this.nodeName);
 
+  var inf = this._splitAttributes(options);
 
-  for (var attrName in this.attributes) {
-    element.setAttribute(attrName, this.attributes[attrName]);
+  for (var attrName in inf.staticAttributes) {
+    element.setAttribute(attrName, inf.staticAttributes[attrName]);
   }
 
   for (var i = 0, n = this.childNodes.length; i < n; i++) {
     element.appendChild(this.childNodes[i].freeze(options, hydrators));
+  }
+
+  if (Object.keys(inf.dynamicAttributes).length) {
+    hydrators.push(new ElementAttributeHydrator(new NodeSection(options.document, element), options, inf.dynamicAttributes));
   }
 
   return element;
@@ -1788,24 +2874,57 @@ Element.prototype.freezeElement = function(options, hydrators) {
 
 
 /**
+ */
+
+Element.prototype._splitAttributes = function(options) {
+
+  var dynamicAttributes = {};
+  var staticAttributes  = {};
+
+  if (options.attributes) {
+    for (var key in this.attributes) {
+      var attrClass = options.attributes[key];
+      if (attrClass && (!attrClass.test || attrClass.test(this, key, this.attributes[key]))) {
+        dynamicAttributes[key] = this.attributes[key];
+      } else {
+        staticAttributes[key]  = this.attributes[key];
+      }
+    }
+  } else {
+    staticAttributes = this.attributes;
+  }
+
+
+  return {
+    dynamicAttributes : dynamicAttributes,
+    staticAttributes  : staticAttributes
+  };
+};
+
+/**
 */
 
-function ComponentHydrator(clazz, section, childNodes, attributes, options) {
-  this.clazz      = clazz;
-  this.section    = section;
-  this.childNodes = childNodes;
-  this.attributes = attributes;
-  this.options    = options;
+function ComponentHydrator(clazz, section, childNodes, attrInfo, options) {
+  this.clazz                = clazz;
+  this.section              = section;
+  this.childNodes           = childNodes;
+  this.dynamicAttributes    = attrInfo.dynamicAttributes;
+  this.attributes           = attrInfo.staticAttributes;
+  this.hasDynamicAttributes = !!Object.keys(attrInfo.dynamicAttributes).length;
+  this.options              = options;
 }
 
 /**
 */
 
-ComponentHydrator.prototype.hydrate = function(root, bindings) {
+ComponentHydrator.prototype.hydrate = function(root, view) {
   if (!this._marker) this._marker = this.section.createMarker();
-  bindings.push(new this.clazz(this._marker.createSection(root), this.childNodes, this.attributes, this.options));
-}
-
+  var ref = new this.clazz(this._marker.createSection(root), this.childNodes, this.attributes, view);
+  if (this.hasDynamicAttributes) {
+    _hydrateDynamicAttributes(ref, this.options, this.dynamicAttributes, view);
+  }
+  view.bindings.push(ref);
+};
 
 /**
  */
@@ -1814,7 +2933,35 @@ module.exports = function(name, attributes, children) {
   return new Element(name, attributes, Array.prototype.slice.call(arguments, 2));
 };
 
-},{"./_fragmentSection":8,"./fragment":15,"./section":19}],15:[function(require,module,exports){
+/**
+ */
+
+function ElementAttributeHydrator(section, options, dynamicAttributes) {
+  this.section           = section;
+  this.options           = options;
+  this.dynamicAttributes = dynamicAttributes;
+}
+
+/**
+ */
+
+ElementAttributeHydrator.prototype.hydrate = function(root, view) {
+  if (!this._marker) this._marker = this.section.createMarker();
+  _hydrateDynamicAttributes(this._marker.findNode(root), this.options, this.dynamicAttributes, view);
+};
+
+/**
+ */
+
+function _hydrateDynamicAttributes(ref, options, dynamicAttributes, view) {
+  for (var key in dynamicAttributes) {
+    var clazz = options.attributes[key];
+    var attr = new clazz(ref, key, dynamicAttributes[key], view);
+    if (attr.update) view.bindings.push(attr);
+  }
+}
+
+},{"32":32,"35":35,"39":39,"41":41}],39:[function(require,module,exports){
 
 /**
  */
@@ -1852,153 +2999,25 @@ module.exports = function() {
   return new Fragment(children);
 };
 
-},{}],16:[function(require,module,exports){
+},{}],40:[function(require,module,exports){
 /**
  */
 
 module.exports = {
-  element   : require("./element"),
-  fragment  : require("./fragment"),
-  text      : require("./text"),
-  dynamic   : require("./dynamic"),
-  comment   : require("./comment"),
-  template  : require("./template"),
-  root      : require("./root"),
-  reference : require("./reference")
+  element   : require(38),
+  fragment  : require(39),
+  text      : require(43),
+  dynamic   : require(37),
+  comment   : require(36),
+  template  : require(42),
+
+  View      : require(44)
 };
 
-},{"./comment":12,"./dynamic":13,"./element":14,"./fragment":15,"./reference":17,"./root":18,"./template":20,"./text":21}],17:[function(require,module,exports){
-var extend         = require("xtend/mutable");
-var _getNodePath   = require("./_getNodePath");
-var _getNodeByPath = require("./_getNodeByPath");
-
-/**
- */
-
-function Reference(name, node) {
-  this.name            = name;
-  this.node            = node;
-  this.node.parentNode = this;
-}
-
-/**
- */
-
-Reference.prototype.nodeType = 14;
-
-/**
- */
-
-Reference.prototype.freeze = function(options, o) {
-
-  if (options.components[this.node.nodeName]) {
-    var hydrators = [];
-    var ret = this.node.freeze(options, hydrators);
-
-    // this stuff is ratchet, but it works
-    options.refs[this.name] = function(root, bindings) {
-      var b2 = [];
-      hydrators[0].hydrate(root, b2);
-      bindings.push(b2[0]);
-      return b2[0];
-    };
-  } else {
-    var path = _getNodePath(this);
-
-    options.refs[this.name] = function(root) {
-      return _getNodeByPath(root, path);
-    }
-
-    ret = this.node.freeze(options, hydrators);
-  }
-
-  return ret
-};
-
-/**
- */
-
-module.exports = function(name, node) {
-  return new Reference(name, node);
-};
-
-},{"./_getNodeByPath":9,"./_getNodePath":10,"xtend/mutable":24}],18:[function(require,module,exports){
-var _getNodeByPath = require("./_getNodeByPath");
-var _getNodePath   = require("./_getNodePath");
-
-/**
- */
-
-function Root(node, handler) {
-  this.node    = node;
-  this.handler = handler;
-}
-
-/**
- */
-
-Root.prototype.freeze = function(options, hydrators) {
-
-  var refs     = {};
-
-  options.refs = refs;
-  var ret = this.node.freeze(options, hydrators);
-
-  hydrators.unshift(new Hydrator(refs, this.handler, options));
-
-  return ret;
-}
-
-/**
- */
-
-function Hydrator(refPaths, handler, options) {
-  this.refPaths = refPaths;
-  this.handler  = handler;
-  this.options  = options;
-}
-
-/**
- */
-
-Hydrator.prototype.hydrate = function(root, bindings) {
-  var refs = {};
-
-  for (var refName in this.refPaths) {
-    refs[refName] = this.refPaths[refName](root, bindings);
-  }
-
-  bindings.unshift(new Binding(refs, this.handler, this.options));
-}
-
-/**
- */
-
-function Binding(refs, handler, options) {
-  this.refs    = refs;
-  this.handler = handler;
-  this.options = options;
-}
-
-/**
- */
-
-Binding.prototype.update = function(context) {
-  this.handler.call(this, this.refs, context);
-};
-
-
-/**
- */
-
-module.exports = function(node, handler) {
-  return new Root(node, handler);
-}
-
-},{"./_getNodeByPath":9,"./_getNodePath":10}],19:[function(require,module,exports){
-var extend          = require("xtend/mutable");
-var FragmentSection = require("./_fragmentSection");
-var NodeSection     = require("./_nodeSection");
+},{"36":36,"37":37,"38":38,"39":39,"42":42,"43":43,"44":44}],41:[function(require,module,exports){
+var extend          = require(46);
+var FragmentSection = require(32);
+var NodeSection     = require(35);
 
 module.exports = function(document, node) {
   if (node.nodeType === 11) {
@@ -2010,26 +3029,34 @@ module.exports = function(document, node) {
   }
 };
 
-},{"./_fragmentSection":8,"./_nodeSection":11,"xtend/mutable":24}],20:[function(require,module,exports){
-var defaultDocument = require("nofactor");
-var View            = require("./view");
-var extend          = require("xtend/mutable");
-var FragmentSection = require("./_fragmentSection");
-var NodeSection     = require("./_nodeSection");
+},{"32":32,"35":35,"46":46}],42:[function(require,module,exports){
+var defaultDocument = require(45);
+var View            = require(44);
+var extend          = require(46);
+var FragmentSection = require(32);
+var NodeSection     = require(35);
+
+function _lowercaseHash(hash) {
+  var c1 = hash || {};
+  var c2 = {};
+
+  for (var k in c1) {
+    c2[k.toLowerCase()] = c1[k];
+  }
+
+  return c2;
+}
 
 /**
  */
 
-function _uppercaseComponentNames(options) {
-  var c1 = options.components || {};
-  var c2 = {};
-
-  for (var k in c1) {
-    c2[k.toUpperCase()] = c1[k];
-  }
-
-  return extend(options, { components: c2 })
+function _lowercaseComponentNames(options) {
+  return extend({}, options, {
+    components: _lowercaseHash(options.components),
+    attributes: options.attributes
+  });
 }
+
 /**
  */
 
@@ -2040,9 +3067,12 @@ function Template(vnode, options) {
   // hydrates nodes when the template is used
   this._hydrators = [];
 
-  options = _uppercaseComponentNames(extend({
+  options = _lowercaseComponentNames(extend({
     document  : defaultDocument
   }, options));
+
+  this.viewClass = options.viewClass || View;
+  this.options   = options;
 
   // freeze & create the template node immediately
   var node = vnode.freeze(options, this._hydrators);
@@ -2059,18 +3089,21 @@ function Template(vnode, options) {
  * creates a new view
  */
 
-Template.prototype.view = function(context) {
+Template.prototype.view = function(context, options) {
 
   // TODO - make compatible with IE 8
   var section     = this.section.clone();
-  var bindings = [];
+
+  var view = new this.viewClass(section, this, options);
 
   for (var i = 0, n = this._hydrators.length; i < n; i++) {
-    this._hydrators[i].hydrate(section.node || section.start.parentNode, bindings);
+    this._hydrators[i].hydrate(section.node || section.start.parentNode, view);
   }
 
+  if (context) view.update(context);
+
   // TODO - set section instead of node
-  return new View(section, bindings, context);
+  return view;
 };
 
 /**
@@ -2080,7 +3113,7 @@ module.exports = function(vnode, options) {
   return new Template(vnode, options);
 };
 
-},{"./_fragmentSection":8,"./_nodeSection":11,"./view":22,"nofactor":23,"xtend/mutable":24}],21:[function(require,module,exports){
+},{"32":32,"35":35,"44":44,"45":45,"46":46}],43:[function(require,module,exports){
 /**
  */
 
@@ -2102,16 +3135,15 @@ module.exports = function(nodeValue) {
   return new Text(nodeValue);
 };
 
-},{}],22:[function(require,module,exports){
+},{}],44:[function(require,module,exports){
 /**
  */
 
-function View(section, bindings, context) {
-
+function View(section, template, options) {
   this.section  = section;
-  this.bindings = bindings;
-
-  if (context) this.update(context);
+  this.bindings = [];
+  this.template = template;
+  this.options  = options;
 }
 
 /**
@@ -2122,31 +3154,31 @@ View.prototype.update = function(context) {
   for (var i = 0, n = this.bindings.length; i < n; i++) {
     this.bindings[i].update(context);
   }
-}
+};
 
 /**
  */
 
 View.prototype.render = function() {
   return this.section.render();
-}
+};
 
 /**
  */
 
 View.prototype.remove = function() {
   return this.section.remove();
-}
+};
 
 /**
  */
 
 module.exports = View;
 
-},{}],23:[function(require,module,exports){
+},{}],45:[function(require,module,exports){
 module.exports = document;
 
-},{}],24:[function(require,module,exports){
+},{}],46:[function(require,module,exports){
 module.exports = extend
 
 function extend(target) {
@@ -2163,4 +3195,82 @@ function extend(target) {
     return target
 }
 
-},{}]},{},[1]);
+},{}],47:[function(require,module,exports){
+function _copy (to, from) {
+
+  for (var i = 0, n = from.length; i < n; i++) {
+
+    var target = from[i];
+
+    for (var property in target) {
+      to[property] = target[property];
+    }
+  }
+
+  return to;
+}
+
+function protoclass (parent, child) {
+
+  var mixins = Array.prototype.slice.call(arguments, 2);
+
+  if (typeof child !== "function") {
+    if(child) mixins.unshift(child); // constructor is a mixin
+    child   = parent;
+    parent  = function() { };
+  }
+
+  _copy(child, parent); 
+
+  function ctor () {
+    this.constructor = child;
+  }
+
+  ctor.prototype  = parent.prototype;
+  child.prototype = new ctor();
+  child.__super__ = parent.prototype;
+  child.parent    = child.superclass = parent;
+
+  _copy(child.prototype, mixins);
+
+  protoclass.setup(child);
+
+  return child;
+}
+
+protoclass.setup = function (child) {
+
+
+  if (!child.extend) {
+    child.extend = function(constructor) {
+
+      var args = Array.prototype.slice.call(arguments, 0);
+
+      if (typeof constructor !== "function") {
+        args.unshift(constructor = function () {
+          constructor.parent.apply(this, arguments);
+        });
+      }
+
+      return protoclass.apply(this, [this].concat(args));
+    }
+
+    child.mixin = function(proto) {
+      _copy(this.prototype, arguments);
+    }
+
+    child.create = function () {
+      var obj = Object.create(child.prototype);
+      child.apply(obj, arguments);
+      return obj;
+    }
+  }
+
+  return child;
+}
+
+
+module.exports = protoclass;
+},{}],48:[function(require,module,exports){
+arguments[4][46][0].apply(exports,arguments)
+},{"46":46}]},{},[1]);

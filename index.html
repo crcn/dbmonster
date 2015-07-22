@@ -19,6 +19,7 @@
   </div>
 
   <script type="x-paperclip" id="main-template">
+    {{databases.length}}
     <table class="table table-striped latest-data">
       <repeat each="{{databases}}" as="db">
         <tbody>
@@ -54,13 +55,31 @@
   <div id="app">
   </div>
 
-<script src="http://code.jquery.com/jquery.js"></script>
 <script src="./paperclip.js?abc"></script>
 <script src="./app.js"></script>
 
 <script>
-  var $app = $("#app");
-  var tpl = paperclip.template($("#main-template").html(), {
+  var app = document.getElementById("app");
+
+  function formatElapsed (value) {
+    if (!value) return '';
+    var str = parseFloat(value).toFixed(2);
+    if (value > 60) {
+      var minutes = Math.floor(value / 60);
+      var comps = (value % 60).toFixed(2).split('.');
+      var seconds = comps[0].lpad('0', 2);
+      var ms = comps[1];
+      str = minutes + ":" + seconds + "." + ms;
+    }
+    return str;
+  }
+
+  var src = document.getElementById("main-template").innerHTML;
+
+  // console.log(paperclip.transpile(src));
+
+
+  var tpl = paperclip.template(src, {
     modifiers: {
       countClassName: function (count) {
         var className = 'label';
@@ -106,15 +125,39 @@
     }
   });
 
+
   var view = tpl.view(controller);
-  $app.html("").append(view.render());
+  app.appendChild(view.render());
+
+  var avgTime = 0;
+
+  var times = [];
 
   function load () {
     controller.load();
+    // console.log(controller.databases.length);
+    // view.accessor.applyChanges(controller);
+
+    var start = Date.now();
     view.update(controller);
+    times.unshift(Date.now() - start);
+
+    if (times.length > 100) {
+      times = times.splice(0, 100);
+    }
+
     // setTimeout(load, ENV.timeout);
     requestAnimationFrame(load);
+    // setTimeout(load, 1000);
   }
+
+  setInterval(function() {
+    var sum = 0;
+
+    console.log("avg update time to update %d items: %d ms", ENV.rows*2*6, times.reduce(function(a, b) {
+      return a + b;
+    }) / times.length);
+  }, 1000);
   load();
 </script>
 </body>

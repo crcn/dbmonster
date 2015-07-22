@@ -1,12 +1,12 @@
 var ENV = {
-	rows: 100,
+	rows:100,
 	timeout: 0
 };
 
 function getTopFiveQueries(db) {
   var arr = db.samples[db.samples.length - 1].queries.slice(0, 5);
   while (arr.length < 5) {
-    arr.push({ query: '', elapsed: 0 });
+    arr.push({ query: 'blah', elapsed: Math.random() * 15 });
   }
   return arr;
 }
@@ -100,6 +100,7 @@ function getLastSample(db) {
 
 
 var controller = {
+	databases: [],
   test: function(){},
 	getLastSampleLength: function(db) {
       return getLastSample(db).queries.length;
