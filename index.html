@@ -18,38 +18,6 @@
     <a href="http://run.plnkr.co/plunks/Wwgjjpl9NHMO5Nd1TUyN/">React DBMonster</a><br>
   </div>
 
-  <script type="x-paperclip" id="main-template">
-    <table class="table table-striped latest-data">
-      <repeat each="{{databases}}" as="db">
-        <tbody>
-          <tr>
-            <td class="dbname">
-              {{db.name}}
-            </td>
-
-            <!-- abba -->
-            <td class="query-count">
-              <span class="{{db | sampleLength | countClassName}}">
-                {{db | sampleLength}}
-              </span>
-            </td>
-
-            <repeat each="{{db.topFiveQueries}}" as="q">
-              <td class="{{q.elapsed|elapsedClassName}}">
-                {{q.elapsed | formatElapsed }}
-                <div class="popover left">
-                  <div class="popover-content">
-                    {{q.query}}
-                  </div>
-                  <div class="arrow"></div>
-                </div>
-              </td>
-            </repeat>
-          </tr>
-        </tbody>
-      </repeat>
-    </table>
-  </script>
 
   <div id="app">
   </div>
@@ -57,10 +25,11 @@
 <script src="http://code.jquery.com/jquery.js"></script>
 <script src="./paperclip.js?abc"></script>
 <script src="./app.js"></script>
+<script src="./template.js"></script>
 
 <script>
   var $app = $("#app");
-  var tpl = paperclip.template($("#main-template").html(), {
+  var tpl = paperclip.template(template, {
     modifiers: {
       countClassName: function (count) {
         var className = 'label';
